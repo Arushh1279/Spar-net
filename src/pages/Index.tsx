@@ -105,7 +105,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-pink-900 w-full relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-blue-900 w-full relative overflow-hidden">
       {/* Animated Boxer Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Energy particles */}
