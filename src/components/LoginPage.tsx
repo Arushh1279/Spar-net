@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -18,14 +18,58 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'enter') {
+        const form = document.getElementById('auth-form') as HTMLFormElement | null;
+        form?.requestSubmit();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!isLogin && password !== confirmPassword) {
-      alert('Passwords do not match');
+      setError('Passwords do not match');
       return;
     }
-    onLogin(email, password);
+    try {
+      setSubmitting(true);
+      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const contentType = res.headers.get('content-type') || '';
+      let data: any = null;
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = text ? { error: text } : null;
+        }
+      }
+      if (!res.ok) throw new Error(data?.error || 'Request failed');
+      const userId = data?.user?.id || data?.session?.user?.id;
+      if (userId) {
+        try { localStorage.setItem('sparnet:userId', userId); } catch {}
+      }
+      onLogin(email, password);
+    } catch (err: any) {
+      setError(err?.message || 'Something went wrong');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -45,7 +89,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form id="auth-form" onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Input
                 type="email"
@@ -95,17 +139,24 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               </div>
             )}
 
+            {error && (
+              <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-2">
+                {error}
+              </div>
+            )}
+
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-pink-500 to-red-600 hover:from-pink-600 hover:to-red-700 text-white font-bold py-3 rounded-xl transition-all duration-200 shadow-lg shadow-pink-500/25"
+              disabled={submitting}
+              className="w-full bg-gradient-to-r from-pink-500 to-red-600 hover:from-pink-600 hover:to-red-700 text-white font-bold py-3 rounded-xl transition-all duration-200 shadow-lg shadow-pink-500/25 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isLogin ? 'Enter the Arena' : 'Join the Fight'}
+              {submitting ? 'Working...' : isLogin ? 'Enter the Arena' : 'Join the Fight'}
             </Button>
           </form>
 
           <div className="text-center">
             <button
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => { setIsLogin(!isLogin); setError(null); }}
               className="text-pink-400 hover:text-pink-300 transition-colors"
             >
               {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}

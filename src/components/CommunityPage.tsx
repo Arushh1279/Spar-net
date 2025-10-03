@@ -1,247 +1,219 @@
 import React from 'react';
-import { Star, MapPin, MessageCircle, UserPlus, Crown, Shield, Users, Trophy, Zap } from 'lucide-react';
-import logo from './logo.webp';
+import { useEffect, useMemo, useState } from 'react';
+import { Heart, MessageCircle, Repeat2, Send, Trash2, Users } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-const CommunityPage = () => {
-  const members = [
-    {
-      id: 1,
-      name: 'Marcus Chen',
-      role: 'Gym Owner',
-      gym: 'Elite Combat Academy',
-      location: 'New York, NY',
-      specialties: ['Boxing', 'MMA'],
-      rating: 4.9,
-      image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
-      verified: true,
-      badge: 'owner'
-    },
-    {
-      id: 2,
-      name: 'Sarah Johnson',
-      role: 'Fighter',
-      gym: 'Dragon Martial Arts',
-      location: 'Los Angeles, CA',
-      specialties: ['Karate', 'Kickboxing'],
-      rating: 4.8,
-      image: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face',
-      verified: true,
-      badge: 'fighter'
-    },
-    {
-      id: 3,
-      name: 'Alex Rodriguez',
-      role: 'Member',
-      gym: 'Iron Fist Dojo',
-      location: 'Chicago, IL',
-      specialties: ['Jiu-Jitsu', 'Wrestling'],
-      rating: 4.7,
-      image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
-      verified: false,
-      badge: 'member'
-    },
-    {
-      id: 4,
-      name: 'Emma Williams',
-      role: 'Trainer',
-      gym: 'Phoenix Fighting Club',
-      location: 'Miami, FL',
-      specialties: ['Muay Thai', 'Boxing'],
-      rating: 4.9,
-      image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face',
-      verified: true,
-      badge: 'trainer'
-    }
-  ];
+type Post = {
+  id: string;
+  authorName: string;
+  handle: string;
+  avatarUrl?: string;
+  content: string;
+  createdAt: number;
+  likes: number;
+  liked: boolean;
+};
 
-  const getBadgeIcon = (badge: string) => {
-    switch (badge) {
-      case 'owner':
-        return <Crown size={14} className="text-yellow-400" />;
-      case 'fighter':
-        return <Shield size={14} className="text-red-400" />;
-      case 'trainer':
-        return <Star size={14} className="text-blue-400" />;
-      default:
-        return null;
-    }
-  };
+const STORAGE_KEY = 'sparnet:communityPosts:v1';
 
-  const getBadgeColor = (badge: string) => {
-    switch (badge) {
-      case 'owner':
-        return 'bg-yellow-500/20 text-yellow-300';
-      case 'fighter':
-        return 'bg-red-500/20 text-red-300';
-      case 'trainer':
-        return 'bg-blue-500/20 text-blue-300';
-      default:
-        return 'bg-gray-500/20 text-gray-300';
-    }
-  };
+const seedPosts: Post[] = [
+  {
+    id: 'seed-1',
+    authorName: 'Spar-net',
+    handle: 'sparnet',
+    avatarUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=100&h=100&fit=crop&crop=face',
+    content: 'Welcome to Community! Share your training updates, fight clips, tips, and wins. 🥊',
+    createdAt: Date.now() - 1000 * 60 * 60 * 5,
+    likes: 23,
+    liked: false,
+  },
+  {
+    id: 'seed-2',
+    authorName: 'Alex Rodriguez',
+    handle: 'alex_jiujitsu',
+    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
+    content: 'Three rounds of hard sparring today. Footwork is finally clicking. 🔥',
+    createdAt: Date.now() - 1000 * 60 * 60 * 2,
+    likes: 12,
+    liked: false,
+  },
+];
+
+function loadPosts(): Post[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return seedPosts;
+    const parsed = JSON.parse(raw) as Post[];
+    if (!Array.isArray(parsed)) return seedPosts;
+    return parsed;
+  } catch (e) {
+    return seedPosts;
+  }
+}
+
+function savePosts(posts: Post[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+  } catch (e) {
+    // ignore quota errors for now
+  }
+}
+
+function timeAgo(ts: number): string {
+  const seconds = Math.floor((Date.now() - ts) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+const CommunityPage: React.FC = () => {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    setPosts(loadPosts());
+  }, []);
+
+  useEffect(() => {
+    if (posts.length) savePosts(posts);
+  }, [posts]);
+
+  const sortedPosts = useMemo(
+    () => [...posts].sort((a, b) => b.createdAt - a.createdAt),
+    [posts]
+  );
+
+  function handlePost() {
+    const content = draft.trim();
+    if (!content) return;
+    const newPost: Post = {
+      id: `p-${Date.now()}`,
+      authorName: 'You',
+      handle: 'you',
+      avatarUrl:
+        'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face',
+      content,
+      createdAt: Date.now(),
+      likes: 0,
+      liked: false,
+    };
+    setPosts((prev) => [newPost, ...prev]);
+    setDraft('');
+  }
+
+  function toggleLike(id: string) {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === id ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 } : p
+      )
+    );
+  }
+
+  function deletePost(id: string) {
+    setPosts((prev) => prev.filter((p) => p.id !== id));
+  }
 
   return (
     <div className="space-y-6">
-      {/* Community Hero Section */}
-      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-purple-600/20 via-pink-600/20 to-red-600/20 backdrop-blur-sm p-8 text-white">
-        <div className="relative z-10">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="w-12 h-12 bg-pink-500/20 rounded-xl flex items-center justify-center">
-              <Users className="text-pink-400" size={24} />
-            </div>
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-400 via-red-400 to-pink-600 bg-clip-text text-transparent">
-              Community
+      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-purple-600/20 via-pink-600/20 to-red-600/20 backdrop-blur-sm p-6 text-white">
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="w-10 h-10 bg-pink-500/20 rounded-xl flex items-center justify-center">
+            <Users className="text-pink-400" size={20} />
+          </div>
+          <div>
+            <h2 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-pink-400 via-red-400 to-pink-600 bg-clip-text text-transparent">
+              Community Feed
             </h2>
+            <p className="text-gray-200 text-xs md:text-sm">Post training updates, tips, questions, or wins</p>
           </div>
-          <p className="text-gray-200 mb-6">Connect with warriors, trainers, and gym owners around you</p>
-          
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="flex items-center justify-center space-x-1 mb-1">
-                <Users size={16} className="text-pink-400" />
-                <p className="text-2xl font-bold">1,247</p>
-              </div>
-              <p className="text-gray-300 text-xs">Active Fighters</p>
-            </div>
-            <div className="text-center">
-              <div className="flex items-center justify-center space-x-1 mb-1">
-                <Crown size={16} className="text-yellow-400" />
-                <p className="text-2xl font-bold">89</p>
-              </div>
-              <p className="text-gray-300 text-xs">Gym Owners</p>
-            </div>
-            <div className="text-center">
-              <div className="flex items-center justify-center space-x-1 mb-1">
-                <Trophy size={16} className="text-green-400" />
-                <p className="text-2xl font-bold">324</p>
-              </div>
-              <p className="text-gray-300 text-xs">Champions</p>
-            </div>
-            <div className="text-center">
-              <div className="flex items-center justify-center space-x-1 mb-1">
-                <Zap size={16} className="text-blue-400" />
-                <p className="text-2xl font-bold">156</p>
-              </div>
-              <p className="text-gray-300 text-xs">Trainers</p>
+        </div>
+      </div>
+
+      <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-4 md:p-5">
+        <div className="flex items-start gap-3">
+          <Avatar>
+            <AvatarImage src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face" />
+            <AvatarFallback>YOU</AvatarFallback>
+          </Avatar>
+          <div className="flex-1">
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="What's happening?"
+              className="bg-white/5 text-white border-white/10 placeholder:text-gray-400"
+            />
+            <div className="flex items-center justify-between mt-3">
+              <div className="text-xs text-gray-400">Press Cmd/Ctrl + Enter to post</div>
+              <Button
+                onClick={handlePost}
+                disabled={!draft.trim()}
+                className="bg-gradient-to-r from-pink-500/80 to-red-500/80 text-white hover:from-pink-500 hover:to-red-500"
+              >
+                <Send className="mr-1" size={16} /> Post
+              </Button>
             </div>
           </div>
         </div>
-        
-        {/* Floating elements */}
-        <div className="absolute top-4 right-4 w-2 h-2 bg-pink-500 rounded-full animate-ping"></div>
-        <div className="absolute bottom-6 left-6 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
       </div>
 
-      {/* Filter Pills */}
-      <div className="flex space-x-3 overflow-x-auto pb-2">
-        {['All Warriors', 'Gym Owners', 'Fighters', 'Trainers', 'Champions'].map((filter) => (
-          <button
-            key={filter}
-            className={`px-4 py-2 rounded-2xl font-medium whitespace-nowrap transition-all duration-200 ${
-              filter === 'All Warriors'
-                ? 'bg-gradient-to-r from-pink-500/80 to-red-500/80 text-white shadow-lg shadow-pink-500/25'
-                : 'bg-black/20 backdrop-blur-sm text-gray-300 hover:bg-black/30 hover:text-pink-400'
-            }`}
-          >
-            {filter}
-          </button>
-        ))}
-      </div>
-
-      {/* Members List - Redesigned */}
-      <div className="space-y-4">
-        {members.map((member) => (
+      <div className="space-y-3">
+        {sortedPosts.map((post) => (
           <div
-            key={member.id}
-            className="bg-black/20 backdrop-blur-sm rounded-3xl p-5 hover:bg-black/30 transition-all duration-300 cursor-pointer group hover:shadow-lg hover:shadow-pink-500/10"
+            key={post.id}
+            className="bg-black/20 backdrop-blur-sm rounded-3xl p-4 md:p-5 hover:bg-black/30 transition-colors"
           >
-            <div className="flex items-start space-x-4">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-pink-500/20 to-red-500/20 p-0.5">
-                  <img
-                    src={member.image}
-                    alt={member.name}
-                    className="w-full h-full rounded-2xl object-cover"
-                  />
-                </div>
-                {member.verified && (
-                  <div className="absolute -top-1 -right-1 w-6 h-6 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-lg">
-                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
+            <div className="flex items-start gap-3">
+              <Avatar>
+                {post.avatarUrl ? (
+                  <AvatarImage src={post.avatarUrl} />
+                ) : (
+                  <AvatarFallback>{post.authorName.slice(0, 2).toUpperCase()}</AvatarFallback>
                 )}
-              </div>
-              
-              <div className="flex-1">
-                <div className="flex items-center space-x-2 mb-2">
-                  <h4 className="font-bold text-white text-lg">{member.name}</h4>
-                  <span className={`px-3 py-1 rounded-xl text-xs font-medium flex items-center space-x-1 ${getBadgeColor(member.badge)}`}>
-                    {getBadgeIcon(member.badge)}
-                    <span className="capitalize">{member.role}</span>
-                  </span>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold text-white truncate">{post.authorName}</div>
+                  <div className="text-gray-400 truncate">@{post.handle}</div>
+                  <div className="text-gray-500">•</div>
+                  <div className="text-gray-400">{timeAgo(post.createdAt)}</div>
                 </div>
-                
-                <p className="text-pink-300 font-medium mb-2">{member.gym}</p>
-                
-                <div className="flex items-center space-x-4 text-sm text-gray-300 mb-3">
-                  <div className="flex items-center space-x-1">
-                    <MapPin size={14} className="text-gray-400" />
-                    <span>{member.location}</span>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <Star size={14} className="text-yellow-400 fill-yellow-400" />
-                    <span className="font-medium">{member.rating}</span>
-                  </div>
-                </div>
-                
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {member.specialties.map((specialty) => (
-                    <span
-                      key={specialty}
-                      className="px-3 py-1 bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 text-xs rounded-xl font-medium"
-                    >
-                      {specialty}
-                    </span>
-                  ))}
-                </div>
-                
-                <div className="flex space-x-3">
-                  <button className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 text-blue-300 rounded-xl text-sm font-medium hover:from-blue-500/30 hover:to-cyan-500/30 transition-all duration-200 backdrop-blur-sm">
-                    <MessageCircle size={14} />
-                    <span>Message</span>
+                <div className="mt-2 text-gray-200 whitespace-pre-wrap break-words">{post.content}</div>
+                <div className="mt-3 flex items-center gap-6 text-sm">
+                  <button
+                    onClick={() => toggleLike(post.id)}
+                    className={`flex items-center gap-1 transition-colors ${
+                      post.liked ? 'text-pink-400' : 'text-gray-400 hover:text-pink-300'
+                    }`}
+                  >
+                    <Heart size={16} className={post.liked ? 'fill-pink-400' : ''} />
+                    <span>{post.likes}</span>
                   </button>
-                  <button className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 rounded-xl text-sm font-medium hover:from-purple-500/30 hover:to-pink-500/30 transition-all duration-200 backdrop-blur-sm">
-                    <UserPlus size={14} />
-                    <span>Connect</span>
+                  <button className="flex items-center gap-1 text-gray-400 hover:text-blue-300 transition-colors">
+                    <MessageCircle size={16} />
+                    <span>Reply</span>
+                  </button>
+                  <button className="flex items-center gap-1 text-gray-400 hover:text-green-300 transition-colors">
+                    <Repeat2 size={16} />
+                    <span>Repost</span>
+                  </button>
+                  <button
+                    onClick={() => deletePost(post.id)}
+                    className="ml-auto flex items-center gap-1 text-gray-500 hover:text-red-300 transition-colors"
+                    aria-label="Delete post"
+                  >
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Join Community CTA - Redesigned */}
-      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-pink-600/20 via-purple-600/20 to-red-600/20 backdrop-blur-sm p-8 text-center">
-        <div className="relative z-10">
-          <div className="w-16 h-16  rounded-2xl flex items-center justify-center mx-auto mb-4">
-             <img src={logo} alt="Spar-net logo" className="h-8 w-8" />
-          </div>
-          <h3 className="text-2xl font-bold text-white mb-3">Join the Elite</h3>
-          <p className="text-gray-300 mb-6 max-w-md mx-auto">
-            Connect with martial artists around you, share your journey, and become part of the ultimate fighting community
-          </p>
-          <button className="bg-gradient-to-r from-pink-500/80 to-red-500/80 text-white px-8 py-4 rounded-2xl font-bold hover:from-pink-500 hover:to-red-500 transition-all duration-200 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-105">
-            Become a Warrior
-          </button>
-        </div>
-        
-        {/* Floating elements */}
-        <div className="absolute top-6 right-8 w-2 h-2 bg-pink-500 rounded-full animate-ping"></div>
-        <div className="absolute bottom-8 left-8 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse delay-500"></div>
-        <div className="absolute top-1/2 right-4 w-1 h-1 bg-purple-500 rounded-full animate-bounce"></div>
       </div>
     </div>
   );
